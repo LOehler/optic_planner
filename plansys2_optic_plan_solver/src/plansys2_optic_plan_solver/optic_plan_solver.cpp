@@ -62,27 +62,36 @@ OPTICPlanSolver::getPlan(
   bool solution = false;
 
   if (plan_file.is_open()) {
-    while (getline(plan_file, line)) {
-      if (!solution) {
-        if (line.find("Solution Found") != std::string::npos) {
-          solution = true;
+    std::string file_content((std::istreambuf_iterator<char>(plan_file)),
+      std::istreambuf_iterator<char>());
+    size_t pos = file_content.rfind("Plan found");
+    if (pos != std::string::npos) {
+      std::istringstream iss(file_content.substr(pos));
+      while (std::getline(iss, line)) {
+        if (!solution) {
+          if (line.find("Plan found") != std::string::npos) {
+            solution = true;
+            RCLCPP_INFO(lc_node_->get_logger(), "Plan found, parsing plan file...");
+          }
+        } else if (line.empty()) {
+          break;
+        } else if (line.front() != ';') {
+          plansys2_msgs::msg::PlanItem item;
+          size_t colon_pos = line.find(":");
+          size_t colon_par = line.find(")");
+          size_t colon_bra = line.find("[");
+
+          std::string time = line.substr(0, colon_pos);
+          std::string action = line.substr(colon_pos + 2, colon_par - colon_pos - 1);
+          std::string duration = line.substr(colon_bra + 1);
+          duration.pop_back();
+
+          item.time = std::stof(time);
+          item.action = action;
+          item.duration = std::stof(duration);
+
+          ret.items.push_back(item);
         }
-      } else if (line.front() != ';') {
-        plansys2_msgs::msg::PlanItem item;
-        size_t colon_pos = line.find(":");
-        size_t colon_par = line.find(")");
-        size_t colon_bra = line.find("[");
-
-        std::string time = line.substr(0, colon_pos);
-        std::string action = line.substr(colon_pos + 2, colon_par - colon_pos - 1);
-        std::string duration = line.substr(colon_bra + 1);
-        duration.pop_back();
-
-        item.time = std::stof(time);
-        item.action = action;
-        item.duration = std::stof(duration);
-
-        ret.items.push_back(item);
       }
     }
     plan_file.close();
